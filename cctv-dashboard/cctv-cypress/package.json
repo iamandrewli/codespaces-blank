@@ -1,0 +1,16 @@
+{
+  "name": "cctv-ai-cypress-tests",
+  "version": "1.0.0",
+  "description": "Cypress E2E tests for CCTV AI Gun Detection Dashboard",
+  "scripts": {
+    "test": "cypress run",
+    "test:open": "cypress open",
+    "test:headed": "cypress run --headed",
+    "test:threat": "cypress run --spec 'cypress/e2e/threat-detection.cy.js'",
+    "test:escalation": "cypress run --spec 'cypress/e2e/escalation.cy.js'",
+    "test:clear": "cypress run --spec 'cypress/e2e/mark-as-clear.cy.js'"
+  },
+  "devDependencies": {
+    "cypress": "^13.6.0"
+  }
+}

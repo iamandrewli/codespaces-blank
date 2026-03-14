@@ -1,0 +1,532 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+  <title>CCTV AI Gun Detection Dashboard</title>
+  <style>
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+    :root {
+      --bg: #0b0e14;
+      --bg2: #111520;
+      --bg3: #181d2a;
+      --border: rgba(255,255,255,0.08);
+      --border2: rgba(255,255,255,0.14);
+      --text: #e8eaf0;
+      --text2: #7a8099;
+      --text3: #4a5068;
+      --red: #e24b4a;
+      --red-bg: rgba(226,75,74,0.12);
+      --amber: #f59e0b;
+      --amber-bg: rgba(245,158,11,0.12);
+      --green: #22c55e;
+      --green-bg: rgba(34,197,94,0.1);
+      --blue: #3b82f6;
+      --blue-bg: rgba(59,130,246,0.12);
+      --mono: 'Courier New', monospace;
+    }
+
+    body {
+      font-family: 'Segoe UI', system-ui, sans-serif;
+      background: var(--bg);
+      color: var(--text);
+      min-height: 100vh;
+      font-size: 14px;
+    }
+
+    /* HEADER */
+    .header {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      padding: 14px 20px;
+      border-bottom: 1px solid var(--border);
+      background: var(--bg2);
+    }
+    .header-left { display: flex; align-items: center; gap: 12px; }
+    .rec-dot {
+      width: 10px; height: 10px; border-radius: 50%;
+      background: var(--red);
+      animation: blink 1.4s infinite;
+    }
+    @keyframes blink { 0%,100%{opacity:1} 50%{opacity:0.3} }
+    .header h1 { font-size: 15px; font-weight: 600; letter-spacing: 0.03em; color: var(--text); }
+    .header-sub { font-size: 11px; color: var(--text3); margin-top: 1px; }
+    .header-right { display: flex; align-items: center; gap: 10px; }
+    .pill {
+      font-size: 11px; font-weight: 600; padding: 4px 10px;
+      border-radius: 20px; letter-spacing: 0.04em;
+    }
+    .pill-ok { background: var(--green-bg); color: var(--green); border: 1px solid rgba(34,197,94,0.25); }
+    .pill-alert { background: var(--red-bg); color: var(--red); border: 1px solid rgba(226,75,74,0.3); }
+    .server-status { display: flex; align-items: center; gap: 6px; font-size: 12px; color: var(--text2); }
+    .srv-dot { width: 7px; height: 7px; border-radius: 50%; background: var(--green); animation: blink 2s infinite; }
+
+    /* METRICS */
+    .metrics {
+      display: grid;
+      grid-template-columns: repeat(4, 1fr);
+      gap: 1px;
+      border-bottom: 1px solid var(--border);
+      background: var(--border);
+    }
+    .metric {
+      background: var(--bg2);
+      padding: 14px 20px;
+    }
+    .metric-label { font-size: 10px; color: var(--text3); text-transform: uppercase; letter-spacing: 0.08em; margin-bottom: 6px; }
+    .metric-val { font-size: 26px; font-weight: 700; color: var(--text); font-family: var(--mono); }
+    .metric-val.red { color: var(--red); }
+    .metric-val.amber { color: var(--amber); }
+    .metric-val.small { font-size: 16px; }
+
+    /* LAYOUT */
+    .body {
+      display: grid;
+      grid-template-columns: 1fr 320px;
+      height: calc(100vh - 115px);
+    }
+    .feeds-area {
+      padding: 14px;
+      overflow-y: auto;
+      border-right: 1px solid var(--border);
+    }
+    .feeds-grid {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 10px;
+    }
+
+    /* CAMERA FEED */
+    .feed {
+      border: 1px solid var(--border);
+      border-radius: 8px;
+      overflow: hidden;
+      background: var(--bg2);
+      transition: border-color 0.3s;
+    }
+    .feed.alert-feed { border-color: var(--red); }
+    .feed-top {
+      display: flex; justify-content: space-between; align-items: center;
+      padding: 7px 10px;
+      border-bottom: 1px solid var(--border);
+    }
+    .feed-name { font-size: 11px; font-weight: 600; color: var(--text); letter-spacing: 0.04em; }
+    .feed-badge { font-size: 10px; font-weight: 700; padding: 2px 7px; border-radius: 20px; }
+    .feed-badge.ok { background: var(--green-bg); color: var(--green); }
+    .feed-badge.threat { background: var(--red-bg); color: var(--red); animation: blink 0.6s infinite; }
+    .feed-badge.lockdown { background: var(--amber-bg); color: var(--amber); }
+    .feed-canvas-wrap { position: relative; height: 150px; }
+    .feed-canvas-wrap canvas { display: block; width: 100%; height: 100%; }
+    .det-overlay {
+      position: absolute; inset: 0;
+      pointer-events: none;
+    }
+    .det-box {
+      position: absolute;
+      border: 2px solid var(--red);
+      border-radius: 3px;
+    }
+    .det-box-label {
+      position: absolute; top: -18px; left: 0;
+      background: var(--red); color: white;
+      font-size: 9px; font-weight: 700;
+      padding: 1px 5px; border-radius: 2px;
+      white-space: nowrap;
+    }
+    .feed-footer {
+      display: flex; justify-content: space-between;
+      padding: 5px 10px;
+      border-top: 1px solid var(--border);
+      background: rgba(0,0,0,0.2);
+    }
+    .feed-coord { font-family: var(--mono); font-size: 10px; color: var(--text3); }
+    .feed-ts { font-size: 10px; color: var(--text3); }
+
+    /* SIDE PANEL */
+    .panel {
+      display: flex; flex-direction: column;
+      overflow-y: auto;
+    }
+    .section {
+      border-bottom: 1px solid var(--border);
+      padding: 14px;
+    }
+    .section-title {
+      font-size: 10px; font-weight: 700; color: var(--text3);
+      text-transform: uppercase; letter-spacing: 0.08em;
+      margin-bottom: 10px;
+    }
+
+    /* ALERTS */
+    .alert-item {
+      display: flex; gap: 8px;
+      padding: 8px 0;
+      border-bottom: 1px solid var(--border);
+    }
+    .alert-item:last-child { border-bottom: none; }
+    .alert-dot { width: 7px; height: 7px; border-radius: 50%; margin-top: 4px; flex-shrink: 0; }
+    .alert-dot.red { background: var(--red); }
+    .alert-cam { font-size: 12px; font-weight: 600; color: var(--text); }
+    .alert-coord { font-family: var(--mono); font-size: 10px; color: var(--text2); }
+    .alert-meta { display: flex; gap: 8px; margin-top: 2px; }
+    .alert-time { font-size: 10px; color: var(--text3); }
+    .alert-conf { font-size: 10px; font-weight: 700; }
+    .alert-conf.high { color: var(--red); }
+    .alert-conf.med { color: var(--amber); }
+    .no-alerts { font-size: 12px; color: var(--text3); }
+
+    /* ESCALATION */
+    .active-coord {
+      font-family: var(--mono); font-size: 11px; color: var(--text2);
+      background: var(--bg3); border: 1px solid var(--border);
+      border-radius: 6px; padding: 8px 10px; margin-bottom: 10px;
+    }
+    .esc-btn {
+      width: 100%; padding: 9px;
+      font-size: 12px; font-weight: 600;
+      border-radius: 6px; cursor: pointer;
+      border: 1px solid var(--border2);
+      background: transparent; color: var(--text);
+      margin-bottom: 6px;
+      transition: all 0.15s;
+      letter-spacing: 0.02em;
+    }
+    .esc-btn:hover { background: var(--bg3); }
+    .esc-btn.police { border-color: rgba(59,130,246,0.5); color: var(--blue); }
+    .esc-btn.police:hover { background: var(--blue-bg); }
+    .esc-btn.police.fired { background: var(--blue); color: white; border-color: var(--blue); }
+    .esc-btn.dismiss { border-color: rgba(34,197,94,0.4); color: var(--green); }
+    .esc-btn.dismiss:hover { background: var(--green-bg); }
+    .esc-btn.mass {
+      font-size: 13px; font-weight: 800; padding: 12px;
+      border-color: rgba(226,75,74,0.5); color: var(--red);
+      letter-spacing: 0.05em; margin-top: 4px; margin-bottom: 0;
+    }
+    .esc-btn.mass:hover { background: var(--red-bg); }
+    .esc-btn.mass.fired { background: var(--red); color: white; border-color: var(--red); }
+
+    /* LOG */
+    .log {
+      font-family: var(--mono); font-size: 10px; color: var(--text3);
+      height: 100px; overflow-y: auto;
+      display: flex; flex-direction: column; gap: 3px;
+    }
+    .log-line { padding: 2px 0; }
+    .log-line.a { color: #f87171; }
+    .log-line.ok { color: #4ade80; }
+    .log-line.info { color: var(--text3); }
+
+    /* TOAST */
+    .toast {
+      position: fixed; bottom: 20px; right: 20px;
+      background: var(--bg2); border: 1px solid var(--border2);
+      border-radius: 10px; padding: 12px 16px;
+      max-width: 280px; display: none;
+      z-index: 999;
+    }
+    .toast.show { display: block; }
+    .toast.alert-toast { border-color: rgba(226,75,74,0.5); }
+    .toast-title { font-size: 13px; font-weight: 700; color: var(--text); margin-bottom: 3px; }
+    .toast-body { font-size: 11px; color: var(--text2); }
+  </style>
+</head>
+<body>
+
+<div class="header">
+  <div class="header-left">
+    <div class="rec-dot"></div>
+    <div>
+      <div class="h1" style="font-size:15px;font-weight:700;letter-spacing:0.03em;">CCTV AI THREAT DETECTION</div>
+      <div class="header-sub">Mock demo system — not for operational use</div>
+    </div>
+  </div>
+  <div class="header-right">
+    <div class="server-status">
+      <div class="srv-dot" id="srvDot"></div>
+      <span id="srvLabel">Server online</span>
+    </div>
+    <div class="pill pill-ok" id="sysBadge">ALL CLEAR</div>
+  </div>
+</div>
+
+<div class="metrics">
+  <div class="metric">
+    <div class="metric-label">Cameras Active</div>
+    <div class="metric-val">4/4</div>
+  </div>
+  <div class="metric">
+    <div class="metric-label">Detections Today</div>
+    <div class="metric-val amber" id="mDet">0</div>
+  </div>
+  <div class="metric">
+    <div class="metric-label">Escalated</div>
+    <div class="metric-val red" id="mEsc">0</div>
+  </div>
+  <div class="metric">
+    <div class="metric-label">Last Scan</div>
+    <div class="metric-val small" id="mScan">—</div>
+  </div>
+</div>
+
+<div class="body">
+  <div class="feeds-area">
+    <div class="feeds-grid" id="feedGrid"></div>
+  </div>
+  <div class="panel">
+    <div class="section">
+      <div class="section-title">Active Alerts</div>
+      <div id="alertList"><div class="no-alerts">No threats detected</div></div>
+    </div>
+    <div class="section">
+      <div class="section-title">Escalation Controls</div>
+      <div class="active-coord" id="coordDisp">No active detection</div>
+      <button class="esc-btn police" id="btnPolice" onclick="doEsc('police')">&#128268; Notify Police</button>
+      <button class="esc-btn dismiss" onclick="doEsc('dismiss')">&#10003; Mark as Clear</button>
+      <div style="border-top:1px solid var(--border);margin:10px 0 6px;"></div>
+      <button class="esc-btn mass" id="btnMass" onclick="doEsc('mass')">&#9888; MASS NOTIFICATION</button>
+    </div>
+    <div class="section" style="flex:1;">
+      <div class="section-title">Server Log</div>
+      <div class="log" id="logBox"></div>
+    </div>
+  </div>
+</div>
+
+<div class="toast" id="toast">
+  <div class="toast-title" id="toastTitle"></div>
+  <div class="toast-body" id="toastBody"></div>
+</div>
+
+<script>
+  const cameras = [
+    { id: 'CAM-01', name: 'Main Entrance', zone: 'A' },
+    { id: 'CAM-02', name: 'Car Park North', zone: 'B' },
+    { id: 'CAM-03', name: 'Corridor B2', zone: 'C' },
+    { id: 'CAM-04', name: 'Exit Gate', zone: 'D' },
+  ];
+
+  let detections = [];
+  let totalDet = 0;
+  let totalEsc = 0;
+  let activeAlert = null;
+  let logLines = [];
+
+  function rCoord() {
+    return {
+      lat: (55.8 + Math.random() * 0.05).toFixed(5),
+      lng: (-4.4 + Math.random() * 0.05).toFixed(5)
+    };
+  }
+
+  function ts() {
+    return new Date().toLocaleTimeString('en-GB');
+  }
+
+  function log(msg, type) {
+    logLines.unshift({ msg: `[${ts()}] ${msg}`, type });
+    if (logLines.length > 30) logLines.pop();
+    const box = document.getElementById('logBox');
+    box.innerHTML = logLines.map(l => `<div class="log-line ${l.type}">${l.msg}</div>`).join('');
+  }
+
+  function toast(title, body, alert) {
+    const el = document.getElementById('toast');
+    document.getElementById('toastTitle').textContent = title;
+    document.getElementById('toastBody').textContent = body;
+    el.className = 'toast show' + (alert ? ' alert-toast' : '');
+    clearTimeout(el._t);
+    el._t = setTimeout(() => el.classList.remove('show'), alert ? 5000 : 3500);
+  }
+
+  function drawFeed(id, alertMode) {
+    const canvas = document.getElementById('c-' + id);
+    if (!canvas) return;
+    const ctx = canvas.getContext('2d');
+    const w = canvas.width, h = canvas.height;
+    ctx.clearRect(0, 0, w, h);
+    ctx.fillStyle = alertMode ? '#130808' : '#0b0e14';
+    ctx.fillRect(0, 0, w, h);
+    ctx.strokeStyle = alertMode ? 'rgba(226,75,74,0.07)' : 'rgba(255,255,255,0.04)';
+    ctx.lineWidth = 0.5;
+    for (let x = 0; x < w; x += 32) { ctx.beginPath(); ctx.moveTo(x, 0); ctx.lineTo(x, h); ctx.stroke(); }
+    for (let y = 0; y < h; y += 28) { ctx.beginPath(); ctx.moveTo(0, y); ctx.lineTo(w, y); ctx.stroke(); }
+    for (let i = 0; i < 5; i++) {
+      const bx = Math.random() * (w - 60), by = Math.random() * (h - 30);
+      const bw = 20 + Math.random() * 50, bh = 10 + Math.random() * 25;
+      ctx.fillStyle = alertMode ? 'rgba(70,15,15,0.6)' : 'rgba(20,30,45,0.7)';
+      ctx.fillRect(bx, by, bw, bh);
+    }
+  }
+
+  function buildFeeds() {
+    const grid = document.getElementById('feedGrid');
+    grid.innerHTML = cameras.map(cam => `
+      <div class="feed" id="feed-${cam.id}">
+        <div class="feed-top">
+          <span class="feed-name">${cam.id} — ${cam.name}</span>
+          <span class="feed-badge ok" id="badge-${cam.id}">NORMAL</span>
+        </div>
+        <div class="feed-canvas-wrap">
+          <canvas id="c-${cam.id}" width="400" height="150"></canvas>
+          <div class="det-overlay" id="ov-${cam.id}"></div>
+        </div>
+        <div class="feed-footer">
+          <span class="feed-coord" id="coord-${cam.id}">—</span>
+          <span class="feed-ts" id="ts-${cam.id}">${ts()}</span>
+        </div>
+      </div>
+    `).join('');
+    cameras.forEach(c => drawFeed(c.id, false));
+  }
+
+  function triggerDetection(camId) {
+    const cam = cameras.find(c => c.id === camId);
+    const coord = rCoord();
+    const conf = (75 + Math.random() * 22).toFixed(1);
+    const det = { camId, cam, coord, conf, time: ts(), id: Date.now() };
+    detections.unshift(det);
+    if (detections.length > 6) detections.pop();
+    totalDet++;
+    activeAlert = det;
+    drawFeed(camId, true);
+    document.getElementById('feed-' + camId).classList.add('alert-feed');
+    const badge = document.getElementById('badge-' + camId);
+    if (badge) { badge.className = 'feed-badge threat'; badge.textContent = 'THREAT'; }
+    const ov = document.getElementById('ov-' + camId);
+    if (ov) {
+      const bx = 15 + Math.random() * 55, by = 15 + Math.random() * 40;
+      const bw = 18 + Math.random() * 15, bh = 25 + Math.random() * 15;
+      ov.innerHTML = `<div class="det-box" style="left:${bx}%;top:${by}%;width:${bw}%;height:${bh}%;">
+        <span class="det-box-label">FIREARM ${conf}%</span>
+      </div>`;
+    }
+    document.getElementById('coord-' + camId).textContent = coord.lat + ', ' + coord.lng;
+    document.getElementById('ts-' + camId).textContent = det.time;
+    document.getElementById('srvDot').style.background = 'var(--red)';
+    document.getElementById('srvLabel').textContent = 'THREAT DETECTED';
+    document.getElementById('sysBadge').className = 'pill pill-alert';
+    document.getElementById('sysBadge').textContent = 'ALERT';
+    document.getElementById('mDet').textContent = totalDet;
+    document.getElementById('coordDisp').textContent = cam.name + '  |  ' + coord.lat + ', ' + coord.lng;
+    log('ALERT: Firearm detected on ' + camId + ' (' + cam.name + ') conf:' + conf + '%', 'a');
+    toast('Threat Detected', cam.name + ' — ' + coord.lat + ', ' + coord.lng + ' (' + conf + '% conf)', true);
+    renderAlerts();
+    setTimeout(() => clearCam(camId), 14000);
+  }
+
+  function clearCam(camId) {
+    drawFeed(camId, false);
+    document.getElementById('feed-' + camId).classList.remove('alert-feed');
+    const badge = document.getElementById('badge-' + camId);
+    if (badge) { badge.className = 'feed-badge ok'; badge.textContent = 'NORMAL'; }
+    const ov = document.getElementById('ov-' + camId);
+    if (ov) ov.innerHTML = '';
+    detections = detections.filter(d => d.camId !== camId);
+    if (detections.length === 0) {
+      document.getElementById('srvDot').style.background = '';
+      document.getElementById('srvLabel').textContent = 'Server online';
+      document.getElementById('sysBadge').className = 'pill pill-ok';
+      document.getElementById('sysBadge').textContent = 'ALL CLEAR';
+      document.getElementById('coordDisp').textContent = 'No active detection';
+      activeAlert = null;
+    }
+    log('CAM ' + camId + ': Scene cleared, resuming monitoring', 'ok');
+    renderAlerts();
+  }
+
+  function renderAlerts() {
+    const list = document.getElementById('alertList');
+    if (!detections.length) {
+      list.innerHTML = '<div class="no-alerts">No threats detected</div>';
+      return;
+    }
+    list.innerHTML = detections.map(d => {
+      const cls = parseFloat(d.conf) > 88 ? 'high' : 'med';
+      return `<div class="alert-item">
+        <div class="alert-dot red"></div>
+        <div>
+          <div class="alert-cam">${d.cam.name} (${d.camId})</div>
+          <div class="alert-coord">${d.coord.lat}, ${d.coord.lng}</div>
+          <div class="alert-meta">
+            <span class="alert-time">${d.time}</span>
+            <span class="alert-conf ${cls}">${d.conf}% conf</span>
+          </div>
+        </div>
+      </div>`;
+    }).join('');
+  }
+
+  function doEsc(type) {
+    if (type === 'police') {
+      const btn = document.getElementById('btnPolice');
+      btn.classList.add('fired');
+      btn.textContent = '&#10003; Police Notified';
+      totalEsc++;
+      document.getElementById('mEsc').textContent = totalEsc;
+      const loc = activeAlert ? activeAlert.cam.name : 'unknown';
+      const coord = activeAlert ? activeAlert.coord.lat + ', ' + activeAlert.coord.lng : '—';
+      log('ESCALATED: Police notified — ' + loc + ' (' + coord + ')', 'a');
+      toast('Police Notified', 'Alert escalated for ' + loc, false);
+      setTimeout(() => { btn.classList.remove('fired'); btn.innerHTML = '&#128268; Notify Police'; }, 5000);
+    } else if (type === 'dismiss') {
+      if (activeAlert) clearCam(activeAlert.camId);
+      log('Operator marked scene as clear', 'ok');
+      toast('Cleared', 'Alert dismissed by operator', false);
+    } else if (type === 'mass') {
+      const btn = document.getElementById('btnMass');
+      btn.classList.add('fired');
+      btn.textContent = '&#9888; MASS NOTIFICATION SENT';
+      log('MASS NOTIFICATION: All zones alerted — lockdown protocol initiated', 'a');
+      toast('Mass Notification Sent', 'All zones and emergency services alerted. Lockdown initiated.', true);
+      cameras.forEach(cam => {
+        const b = document.getElementById('badge-' + cam.id);
+        if (b) { b.className = 'feed-badge lockdown'; b.textContent = 'LOCKDOWN'; }
+      });
+      setTimeout(() => {
+        btn.classList.remove('fired');
+        btn.innerHTML = '&#9888; MASS NOTIFICATION';
+        cameras.forEach(cam => {
+          const b = document.getElementById('badge-' + cam.id);
+          if (b && b.textContent === 'LOCKDOWN') { b.className = 'feed-badge ok'; b.textContent = 'NORMAL'; }
+        });
+      }, 9000);
+    }
+  }
+
+  function serverTick() {
+    document.getElementById('mScan').textContent = ts();
+    const fire = Math.random() < 0.2;
+    if (fire) {
+      const free = cameras.filter(c => !detections.find(d => d.camId === c.id));
+      if (free.length) {
+        triggerDetection(free[Math.floor(Math.random() * free.length)].id);
+        return;
+      }
+    }
+    log('Scan complete — no threats detected across 4 feeds', 'info');
+  }
+
+  buildFeeds();
+  log('System initialised — 4 cameras online', 'ok');
+  log('AI detection engine ready', 'ok');
+
+  setTimeout(() => triggerDetection('CAM-01'), 2000);
+  setInterval(serverTick, 6000);
+
+  cameras.forEach(cam => {
+    setInterval(() => {
+      if (!detections.find(d => d.camId === cam.id)) {
+        const c = rCoord();
+        const el = document.getElementById('coord-' + cam.id);
+        const tel = document.getElementById('ts-' + cam.id);
+        if (el) el.textContent = c.lat + ', ' + c.lng;
+        if (tel) tel.textContent = ts();
+      }
+    }, 1800 + Math.random() * 800);
+  });
+</script>
+</body>
+</html>
+window.triggerDetection = triggerDetection;
