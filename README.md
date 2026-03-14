@@ -1,6 +1,6 @@
 ## Important Note 
 
-This was all created by Claude as a way to test out the capabilities.
+This was all created by Claude as a way to test out the capabilities and also to play around with github co-space
 
 
 # CCTV AI Gun Detection Dashboard
@@ -9,7 +9,6 @@ This was all created by Claude as a way to test out the capabilities.
 
 A mock browser-based CCTV threat detection system that simulates AI-powered firearm detection across multiple camera feeds. Built as a demo/prototype to showcase how a real-time gun detection dashboard might look and behave — including live alerts, escalation controls, and mass notification.
 
-![CCTV Dashboard Screenshot](assets/screenshot.png)
 
 > **Disclaimer:** This is a mock demo application only. No real AI, no real cameras, no real detection. All threats are randomly simulated by a mock server. Not for operational use.
 
